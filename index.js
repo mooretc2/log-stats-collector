@@ -9,6 +9,8 @@ const pool = new Pool({ user: 'postgres', database: 'postgres' });
 const app = express();
 const port = process.env.PORT || 3000;
 
+let args = process.argv.slice(2);
+
 // Constants for milliseconds in each window
 const MS_IN_60 = 3600000;
 const MS_IN_30 = 1800000;
@@ -16,14 +18,35 @@ const MS_IN_15 = 900000;
 const MS_IN_5 = 300000;
 
 const statsString = 'SELECT column, COUNT(*)::integer, '
-                 + 'COUNT(*) * 100.0 / sum(count(*)) over() AS percentage_of_requests '
-                 + "FROM requests WHERE NOW() - stamp <= interval 'milliseconds' GROUP BY column;";
+    + 'COUNT(*) * 100.0 / sum(count(*)) over() AS percentage_of_requests '
+    + "FROM requests WHERE NOW() - stamp <= interval 'milliseconds' GROUP BY column;";
 
 let getStats = (ms, col) => pool.query(statsString.replace(/milliseconds/g, ms).replace(/column/g, col));
 
-app.get('/', (req, res) => {
+let prepResponse = (data) => {
     let response = {};
 
+    response.codes = {};
+    response.codes['60'] = data[0].rows;
+    response.codes['30'] = data[1].rows;
+    response.codes['15'] = data[2].rows;
+    response.codes['5'] = data[3].rows;
+
+    response.paths = {};
+    response.paths['60'] = data[4].rows;
+    response.paths['30'] = data[5].rows;
+    response.paths['15'] = data[6].rows;
+    response.paths['5'] = data[7].rows;
+
+    response.users = {};
+    response.users['60'] = data[8].rows;
+    response.users['30'] = data[9].rows;
+    response.users['15'] = data[10].rows;
+    response.users['5'] = data[11].rows;
+    return response;
+};
+
+app.get('/', (req, res) => {
     // Get status codes for each window
     const p60Codes = getStats(MS_IN_60, 'code');
     const p30Codes = getStats(MS_IN_30, 'code');
@@ -43,27 +66,10 @@ app.get('/', (req, res) => {
     const p5Users = getStats(MS_IN_5, 'username');
 
     Promise.all([p60Codes, p30Codes, p15Codes, p5Codes,
-                 p60Paths, p30Paths, p15Paths, p5Paths,
-                 p60Users, p30Users, p15Users, p5Users])
+        p60Paths, p30Paths, p15Paths, p5Paths,
+        p60Users, p30Users, p15Users, p5Users])
         .then((data) => {
-            response.codes = {};
-            response.codes['60'] = data[0].rows;
-            response.codes['30'] = data[1].rows;
-            response.codes['15'] = data[2].rows;
-            response.codes['5'] = data[3].rows;
-
-            response.paths = {};
-            response.paths['60'] = data[4].rows;
-            response.paths['30'] = data[5].rows;
-            response.paths['15'] = data[6].rows;
-            response.paths['5'] = data[7].rows;
-
-            response.users = {};
-            response.users['60'] = data[8].rows;
-            response.users['30'] = data[9].rows;
-            response.users['15'] = data[10].rows;
-            response.users['5'] = data[11].rows;
-            res.json(response);
+            res.json(prepResponse(data));
         })
         .catch((err) => {
             console.log(err);
@@ -115,7 +121,8 @@ let main = async () => {
         + 'stamp TIMESTAMP NOT NULL,'
         + 'username VARCHAR (255),'
         + 'code SMALLINT,'
-        + 'path VARCHAR (255));', (err, res) => {
+        + 'path VARCHAR (255));',
+    (err, res) => {
         console.log(err, res);
     });
 
@@ -132,14 +139,19 @@ let main = async () => {
     // First call to tail brings in all lines from file, then follows changes.
     // Doesn't run until the file is changed the first time, but in a log file
     // that should happen pretty frequently.
-    const tail = new Tail('logFile.log', { startPos: 'start', force: true });
-    tail.on('line', insertData);
+    if (args.length < 1) {
+        args.push('logFile.log');
+    }
+    args.map((file) => {
+        let tail = new Tail(file, { startPos: 'start', force: true });
+        tail.on('line', insertData);
 
-    tail.on('error', (err) => {
-        console.log(err);
+        tail.on('error', (err) => {
+            console.log(err);
+        });
+
+        return tail.start();
     });
-
-    tail.start();
 
     app.listen(port, () => {
         console.log('Listening on port ', port);
