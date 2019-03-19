@@ -19,9 +19,9 @@ const MS_IN_5 = 300000;
 
 const statsString = 'SELECT column, COUNT(*)::integer, '
     + 'COUNT(*) * 100.0 / sum(count(*)) over() AS percentage_of_requests '
-    + "FROM requests WHERE NOW() - stamp <= interval 'milliseconds' GROUP BY column;";
+    + "FROM requests WHERE NOW() - stamp <= interval 'window milliseconds' GROUP BY column;";
 
-let getStats = (ms, col) => pool.query(statsString.replace(/milliseconds/g, ms).replace(/column/g, col));
+let getStats = (ms, col) => pool.query(statsString.replace(/window/g, ms).replace(/column/g, col));
 
 let prepResponse = (data) => {
     let response = {};
@@ -76,17 +76,21 @@ app.get('/', (req, res) => {
         });
 });
 
-function insertData(input) {
-    let line = input.replace(/\r?\n|\r/, ''); // regex from https://stackoverflow.com/a/10805292
-    let parts = line.split(' : ');
-    let timestamp = parts[0];
+// JS doesn't have a date parser that takes a format string so this is what I'm left with
+let parseDate = (timestamp) => {
     let year = timestamp.substring(0, 4);
     let month = timestamp.substring(5, 7);
     let date = timestamp.substring(8, 10);
     let hours = timestamp.substring(11, 13);
     let minutes = timestamp.substring(14, 16);
     let seconds = timestamp.substring(17, 19);
-    let ts = new Date(year, month, date, hours, minutes, seconds);
+    return new Date(year, month - 1, date, hours, minutes, seconds);
+};
+
+function insertData(input) {
+    let line = input.replace(/\r?\n|\r/, ''); // regex from https://stackoverflow.com/a/10805292
+    let parts = line.split(' : ');
+    let ts = parseDate(parts[0]);
     if (Date.now() - ts > MS_IN_60) {
         return;
     }
@@ -132,9 +136,9 @@ let main = async () => {
     });
 
     // For testing. TODO: delete
-    await pool.query(`DELETE FROM requests;`, (err, res) => {
-        console.log(err, res);
-    });
+    // await pool.query(`DELETE FROM requests;`, (err, res) => {
+    //     console.log(err, res);
+    // });
 
     // First call to tail brings in all lines from file, then follows changes.
     // Doesn't run until the file is changed the first time, but in a log file
@@ -158,9 +162,9 @@ let main = async () => {
     });
 
     // For testing. TODO: delete
-    // pool.query(`SELECT COUNT(*)FROM requests;`, (err, res) => {
-    //     console.log(err, res);
-    // });
+    pool.query(`SELECT stamp FROM requests;`, (err, res) => {
+        console.log(err, res.rows);
+    });
 };
 
 main();
