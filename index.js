@@ -15,38 +15,54 @@ const MS_IN_30 = 1800000;
 const MS_IN_15 = 900000;
 const MS_IN_5 = 300000;
 
+const statsString = 'SELECT column, COUNT(*)::integer, '
+                 + 'COUNT(*) * 100.0 / sum(count(*)) over() AS percentage_of_requests '
+                 + "FROM requests WHERE NOW() - stamp <= interval 'milliseconds' GROUP BY column;";
+
+let getStats = (ms, col) => pool.query(statsString.replace(/milliseconds/g, ms).replace(/column/g, col));
+
 app.get('/', (req, res) => {
     let response = {};
 
-    const codestring = 'SELECT column, COUNT(*)::integer, '
-                     + 'COUNT(*) * 100.0 / sum(count(*)) over() AS percentage_of_requests '
-                     + "FROM requests WHERE NOW() - stamp <= interval 'milliseconds' GROUP BY column;";
-
     // Get status codes for each window
-    const p60Codes = pool.query(codestring.replace(/milliseconds/g, MS_IN_60).replace(/column/g, 'code'));
-    const p30Codes = pool.query(codestring.replace(/milliseconds/g, MS_IN_30).replace(/column/g, 'code'));
-    const p15Codes = pool.query(codestring.replace(/milliseconds/g, MS_IN_15).replace(/column/g, 'code'));
-    const p5Codes = pool.query(codestring.replace(/milliseconds/g, MS_IN_5).replace(/column/g, 'code'));
+    const p60Codes = getStats(MS_IN_60, 'code');
+    const p30Codes = getStats(MS_IN_30, 'code');
+    const p15Codes = getStats(MS_IN_15, 'code');
+    const p5Codes = getStats(MS_IN_5, 'code');
 
-    const p60Paths = pool.query(codestring.replace(/milliseconds/g, MS_IN_60).replace(/column/g, 'path'));
-    const p30Paths = pool.query(codestring.replace(/milliseconds/g, MS_IN_30).replace(/column/g, 'path'));
-    const p15Paths = pool.query(codestring.replace(/milliseconds/g, MS_IN_15).replace(/column/g, 'path'));
-    const p5Paths = pool.query(codestring.replace(/milliseconds/g, MS_IN_5).replace(/column/g, 'path'));
+    // Get paths for each window
+    const p60Paths = getStats(MS_IN_60, 'path');
+    const p30Paths = getStats(MS_IN_30, 'path');
+    const p15Paths = getStats(MS_IN_15, 'path');
+    const p5Paths = getStats(MS_IN_5, 'path');
+
+    // Get paths for each window
+    const p60Users = getStats(MS_IN_60, 'username');
+    const p30Users = getStats(MS_IN_30, 'username');
+    const p15Users = getStats(MS_IN_15, 'username');
+    const p5Users = getStats(MS_IN_5, 'username');
 
     Promise.all([p60Codes, p30Codes, p15Codes, p5Codes,
-                 p60Paths, p30Paths, p15Paths, p5Paths])
+                 p60Paths, p30Paths, p15Paths, p5Paths,
+                 p60Users, p30Users, p15Users, p5Users])
         .then((data) => {
             response.codes = {};
-            response.codes.sixty = data[0].rows;
-            response.codes.thirty = data[1].rows;
-            response.codes.fifteen = data[2].rows;
-            response.codes.five = data[3].rows;
+            response.codes['60'] = data[0].rows;
+            response.codes['30'] = data[1].rows;
+            response.codes['15'] = data[2].rows;
+            response.codes['5'] = data[3].rows;
 
             response.paths = {};
-            response.paths.sixty = data[4].rows;
-            response.paths.thirty = data[5].rows;
-            response.paths.fifteen = data[6].rows;
-            response.paths.five = data[7].rows;
+            response.paths['60'] = data[4].rows;
+            response.paths['30'] = data[5].rows;
+            response.paths['15'] = data[6].rows;
+            response.paths['5'] = data[7].rows;
+
+            response.users = {};
+            response.users['60'] = data[8].rows;
+            response.users['30'] = data[9].rows;
+            response.users['15'] = data[10].rows;
+            response.users['5'] = data[11].rows;
             res.json(response);
         })
         .catch((err) => {
@@ -109,9 +125,9 @@ let main = async () => {
     });
 
     // For testing. TODO: delete
-    // await pool.query(`DELETE FROM requests;`, (err, res) => {
-    //     console.log(err, res);
-    // });
+    await pool.query(`DELETE FROM requests;`, (err, res) => {
+        console.log(err, res);
+    });
 
     // First call to tail brings in all lines from file, then follows changes.
     // Doesn't run until the file is changed the first time, but in a log file
