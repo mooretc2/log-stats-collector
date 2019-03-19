@@ -18,24 +18,39 @@ const MS_IN_5 = 300000;
 app.get('/', (req, res) => {
     let response = {};
 
-    const codestring = 'SELECT code, COUNT(*)::integer, '
+    const codestring = 'SELECT column, COUNT(*)::integer, '
                      + 'COUNT(*) * 100.0 / sum(count(*)) over() AS percentage_of_requests '
-                     + "FROM requests WHERE NOW() - stamp <= interval '?' GROUP BY code;";
+                     + "FROM requests WHERE NOW() - stamp <= interval 'milliseconds' GROUP BY column;";
 
     // Get status codes for each window
-    const p60Codes = pool.query(codestring.replace('?', MS_IN_60));
-    const p30Codes = pool.query(codestring.replace('?', MS_IN_30));
-    const p15Codes = pool.query(codestring.replace('?', MS_IN_15));
-    const p5Codes = pool.query(codestring.replace('?', MS_IN_5));
+    const p60Codes = pool.query(codestring.replace(/milliseconds/g, MS_IN_60).replace(/column/g, 'code'));
+    const p30Codes = pool.query(codestring.replace(/milliseconds/g, MS_IN_30).replace(/column/g, 'code'));
+    const p15Codes = pool.query(codestring.replace(/milliseconds/g, MS_IN_15).replace(/column/g, 'code'));
+    const p5Codes = pool.query(codestring.replace(/milliseconds/g, MS_IN_5).replace(/column/g, 'code'));
 
-    Promise.all([p60Codes, p30Codes, p15Codes, p5Codes])
+    const p60Paths = pool.query(codestring.replace(/milliseconds/g, MS_IN_60).replace(/column/g, 'path'));
+    const p30Paths = pool.query(codestring.replace(/milliseconds/g, MS_IN_30).replace(/column/g, 'path'));
+    const p15Paths = pool.query(codestring.replace(/milliseconds/g, MS_IN_15).replace(/column/g, 'path'));
+    const p5Paths = pool.query(codestring.replace(/milliseconds/g, MS_IN_5).replace(/column/g, 'path'));
+
+    Promise.all([p60Codes, p30Codes, p15Codes, p5Codes,
+                 p60Paths, p30Paths, p15Paths, p5Paths])
         .then((data) => {
             response.codes = {};
             response.codes.sixty = data[0].rows;
             response.codes.thirty = data[1].rows;
             response.codes.fifteen = data[2].rows;
             response.codes.five = data[3].rows;
+
+            response.paths = {};
+            response.paths.sixty = data[4].rows;
+            response.paths.thirty = data[5].rows;
+            response.paths.fifteen = data[6].rows;
+            response.paths.five = data[7].rows;
             res.json(response);
+        })
+        .catch((err) => {
+            console.log(err);
         });
 });
 
