@@ -2,6 +2,7 @@
 const express = require('express');
 const { Pool } = require('pg');
 const Tail = require('tail-file');
+
 // I'm using a pg docker container, but should be easy enough to use another solution
 const pool = new Pool({ user: 'postgres', database: 'postgres' });
 
