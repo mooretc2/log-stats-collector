@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable prefer-const */
 const express = require('express');
 const { Pool } = require('pg');
@@ -46,34 +47,43 @@ let prepResponse = (data) => {
     return response;
 };
 
-app.get('/', (req, res) => {
+let collectStats = () => {
+    let stats = {};
     // Get status codes for each window
-    const p60Codes = getStats(MS_IN_60, 'code');
-    const p30Codes = getStats(MS_IN_30, 'code');
-    const p15Codes = getStats(MS_IN_15, 'code');
-    const p5Codes = getStats(MS_IN_5, 'code');
+    stats.p60Codes = getStats(MS_IN_60, 'code');
+    stats.p30Codes = getStats(MS_IN_30, 'code');
+    stats.p15Codes = getStats(MS_IN_15, 'code');
+    stats.p5Codes = getStats(MS_IN_5, 'code');
 
     // Get paths for each window
-    const p60Paths = getStats(MS_IN_60, 'path');
-    const p30Paths = getStats(MS_IN_30, 'path');
-    const p15Paths = getStats(MS_IN_15, 'path');
-    const p5Paths = getStats(MS_IN_5, 'path');
+    stats.p60Paths = getStats(MS_IN_60, 'path');
+    stats.p30Paths = getStats(MS_IN_30, 'path');
+    stats.p15Paths = getStats(MS_IN_15, 'path');
+    stats.p5Paths = getStats(MS_IN_5, 'path');
 
     // Get paths for each window
-    const p60Users = getStats(MS_IN_60, 'username');
-    const p30Users = getStats(MS_IN_30, 'username');
-    const p15Users = getStats(MS_IN_15, 'username');
-    const p5Users = getStats(MS_IN_5, 'username');
+    stats.p60Users = getStats(MS_IN_60, 'username');
+    stats.p30Users = getStats(MS_IN_30, 'username');
+    stats.p15Users = getStats(MS_IN_15, 'username');
+    stats.p5Users = getStats(MS_IN_5, 'username');
 
-    Promise.all([p60Codes, p30Codes, p15Codes, p5Codes,
-        p60Paths, p30Paths, p15Paths, p5Paths,
-        p60Users, p30Users, p15Users, p5Users])
-        .then((data) => {
-            res.json(prepResponse(data));
-        })
-        .catch((err) => {
-            console.log(err);
-        });
+    return new Promise((resolve) => {
+        resolve(stats);
+    });
+};
+
+app.get('/', (req, res) => {
+    collectStats().then((stats) => {
+        Promise.all([stats.p60Codes, stats.p30Codes, stats.p15Codes, stats.p5Codes,
+            stats.p60Paths, stats.p30Paths, stats.p15Paths, stats.p5Paths,
+            stats.p60Users, stats.p30Users, stats.p15Users, stats.p5Users])
+            .then((data) => {
+                res.json(prepResponse(data));
+            })
+            .catch((err) => {
+                console.log(err);
+            });
+    });
 });
 
 // JS doesn't have a date parser that takes a format string so this is what I'm left with
@@ -162,9 +172,9 @@ let main = async () => {
     });
 
     // For testing. TODO: delete
-    pool.query(`SELECT stamp FROM requests;`, (err, res) => {
-        console.log(err, res.rows);
-    });
+    // pool.query('SELECT stamp FROM requests;', (err, res) => {
+    //     console.log(err, res.rows);
+    // });
 };
 
 main();
