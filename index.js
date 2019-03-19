@@ -70,6 +70,7 @@ function insertData(input) {
     }
     let message = parts[1];
     let subparts = parts[1].split(' - ');
+    let userInQuery = parts[1].match(/(?:u=(.*)&?)/g); // Find user in query string
     let user = subparts.length > 1 ? subparts[1] : '';
     let errorCode = null;
     let path = '';
@@ -78,6 +79,10 @@ function insertData(input) {
         errorCode = message.substring(6, 9);
     } else {
         [path] = subparts;
+    }
+
+    if (userInQuery !== null && user !== '') {
+        user = userInQuery[0].slice(2);
     }
     let querystring = `INSERT INTO requests(stamp, username, code, path) VALUES (to_timestamp(${ts.getTime() / 1000.0}), '${user}', ${errorCode}, '${path}');`;
     pool.query(querystring, (err) => {
