@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# From https://github.com/ccroswhite/logfilegen
+
 import logging
 from datetime import datetime
 import random
