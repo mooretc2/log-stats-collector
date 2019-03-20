@@ -62,4 +62,4 @@ Calling `localhost:3000` will return JSON with the following format:
  }
 }
 ```
-Each time interval will have data for each unique code/request/user.
+Where 5/15/30/60 represent time intervals in minutes. Each time interval will have data for each unique code/request/user.
