@@ -1,5 +1,3 @@
-// TODO: delete
-/* eslint-disable no-console */
 /* eslint-disable prefer-const */
 const express = require('express');
 const { Pool } = require('pg');
@@ -9,12 +7,15 @@ const constants = require('./app/constants');
 // I'm using a pg docker container, but should be easy enough to use another solution
 const pool = new Pool({ user: 'postgres', database: 'postgres' });
 
+// Start express server
 const app = express();
 const port = process.env.PORT || 3000;
 require('./app/routes')(app, pool);
 
+// Parse command and program name out of args
 let args = process.argv.slice(2);
 
+// DB queries
 const createTableQueryString = 'CREATE TABLE IF NOT EXISTS requests('
         + 'id serial PRIMARY KEY,'
         + 'stamp TIMESTAMP NOT NULL,'
@@ -26,7 +27,11 @@ const insertQueryString = 'INSERT INTO requests(stamp, username, code, path) VAL
 
 const cleanupQueryString = `DELETE FROM requests WHERE NOW() - stamp > interval '${constants.MS_IN_60} milliseconds';`;
 
-// JS doesn't have a date parser that takes a format string
+/**
+ * Parses the date portion of the input line and returns a Date object
+ * @param {string} timestamp string representation of the date
+ * @returns {Date}
+ */
 let parseDate = (timestamp) => {
     let year = timestamp.substring(0, 4);
     let month = timestamp.substring(5, 7);
@@ -37,6 +42,10 @@ let parseDate = (timestamp) => {
     return new Date(year, month - 1, date, hours, minutes, seconds);
 };
 
+/**
+ * Takes an input line, parses it, and inserts into the db
+ * @param input line of input from the log file
+ * */
 function insertData(input) {
     let line = input.replace(constants.stripNewlinesRegex, '');
     let parts = line.split(' : ');
@@ -68,7 +77,7 @@ function insertData(input) {
     });
 }
 
-// Logic wrapped in async function to make ordering the queries easier
+// Startup logic wrapped in async function to make ordering the queries easier
 let main = async () => {
     // Create requests table if it doesn't exist.
     await pool.query(createTableQueryString, (err, res) => {
@@ -77,36 +86,37 @@ let main = async () => {
 
     // Clean up old data on an interval.
     setInterval(() => {
-        pool.query(cleanupQueryString, (err, res) => {
-            console.log(err, res);
+        pool.query(cleanupQueryString, (err) => {
+            if (err) console.log(err);
         });
     }, constants.CLEANUP_INTERVAL);
 
-    // First call to tail brings in all lines from file, then follows changes.
-    // Doesn't run until the file is changed the first time, but in a log file
-    // that should happen pretty frequently.
+    // Add default 'logFile.log' to args if empty
     if (args.length < 1) {
         args.push('logFile.log');
     }
+
+    // Create a file watcher for each file in args
     args.map((file) => {
         let tail = new Tail(file, { startPos: 'start', force: true });
+
+        // First call to tail brings in all lines from file, then follows changes.
+        // Doesn't run until the file is changed the first time, but in a log file
+        // that should happen pretty frequently.
         tail.on('line', insertData);
 
         tail.on('error', (err) => {
             console.log(err);
         });
 
+        // Start tailing file
         return tail.start();
     });
 
+    // Start listening on given port
     app.listen(port, () => {
         console.log('Listening on port ', port);
     });
-
-    // For testing. TODO: delete
-    // pool.query('SELECT stamp FROM requests;', (err, res) => {
-    //     console.log(err, res.rows);
-    // });
 };
 
 main();

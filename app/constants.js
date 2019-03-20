@@ -1,3 +1,4 @@
+// Constants for use throughout app
 module.exports = {
     // Constants for milliseconds in each window
     MS_IN_60: 3600000,

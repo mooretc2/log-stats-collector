@@ -5,8 +5,19 @@ module.exports = (app, pool) => {
         + 'COUNT(*) * 100.0 / sum(count(*)) over() AS percentage_of_requests '
         + "FROM requests WHERE NOW() - stamp <= interval 'window milliseconds' GROUP BY column;";
 
+    /**
+     * Queries db for rows matching params
+     * @param {int} ms time window in milliseconds
+     * @param {string} col column name
+     * @returns {Promise} promise returned from query
+     */
     let getStats = (ms, col) => pool.query(statsString.replace(/window/g, ms).replace(/column/g, col));
 
+    /**
+     * Creates a response object from db rows
+     * @param {*} data data from db query
+     * @returns {*} response object to be sent
+     */
     let prepResponse = (data) => {
         let response = {};
 
@@ -30,6 +41,10 @@ module.exports = (app, pool) => {
         return response;
     };
 
+    /**
+     * Queries db and assembles query promises into an object to be resolved by Promise.all().
+     * @returns {Promise} object with promises for each query
+     */
     let collectStats = () => {
         let stats = {};
         // Get status codes for each window
@@ -55,8 +70,13 @@ module.exports = (app, pool) => {
         });
     };
 
+    /**
+     * App endpoint. Responds with an object containing stats from the logfile(s).
+     */
     app.get('/', (req, res) => {
         collectStats().then((stats) => {
+            // Allows me to start all queries and respond once they've all returned.
+            // Much faster than running each query sequentially.
             Promise.all([stats.p60Codes, stats.p30Codes, stats.p15Codes, stats.p5Codes,
                 stats.p60Paths, stats.p30Paths, stats.p15Paths, stats.p5Paths,
                 stats.p60Users, stats.p30Users, stats.p15Users, stats.p5Users])
