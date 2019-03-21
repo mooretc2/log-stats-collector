@@ -6,9 +6,13 @@ Make sure you have npm/node installed, and an instance of PostgreSQL running bef
 I use the basic postgres docker container with the default port exposed.
 
 Run these commands in sequence:
+Terminal 1:
+```
+py logFileGen.py
+```
+Terminal 2:
 ```
 npm install
-py logFileGen.py
 npm run start
 ```
 
